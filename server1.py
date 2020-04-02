@@ -14,7 +14,6 @@ from wsgiref.simple_server import make_server
 
 import numpy as np
 import cv2
-import random
 
 import picamera
 from ws4py.websocket import WebSocket
@@ -27,8 +26,8 @@ from ws4py.server.wsgiutils import WebSocketWSGIApplication
 
 ###########################################
 # CONFIGURATION
-WIDTH = 640
-HEIGHT = 480
+WIDTH = 320
+HEIGHT = 240
 FRAMERATE = 24
 HTTP_PORT = 8082
 WS_PORT = 8084
@@ -38,34 +37,8 @@ JSMPEG_MAGIC = b'jsmp'
 JSMPEG_HEADER = Struct('>4sHH')
 VFLIP = True
 HFLIP = True
-monitoring = False
+
 ###########################################
-
-
-def monitor_changes(bdata, ndata):
-    
-    bdata = np.int64(bdata)
-    ndata = np.int64(ndata)
-   # print('bdata \n',bdata[:10], '\n\n')
-   # print('ndata\n', ndata[:10])
-    #first threshold that will "ring" the first bell signaling movement
-    first_threshold = 100**2
-        
-    #take the global variable monitoring as a reference
-    global monitoring
-    
-    #computes the difference between each value in the two matrices for the same i,j position
-
-    differences = np.subtract(bdata, ndata)
-
-   # print('DIFFERENCES \n\n', differences[120:130], '\n\n')
-    #takes the square of every element in the matrix
-    differences_squared = np.square(differences)
-   # print('current max is ', np.max(differences_squared))
-   # print(differences_squared[60:62])
-   # print('diff squared: \n', differences_squared[50:60])
-    if np.max(differences_squared) > first_threshold:
-        print('Something is moving!!')
 
 
 class StreamingHttpHandler(BaseHTTPRequestHandler):
@@ -189,15 +162,16 @@ def main():
         camera.wait_recording(0.125)
         
         camera.capture(stream0, use_video_port=True, format='jpeg')
+        
         data_base = np.frombuffer(stream0.getvalue(), dtype=np.uint8)
+        
+        data_base.astype(np.int64)
+        
         base_img_matrix = cv2.imdecode(data_base, 0)
-       # print('base matrix \n\n', base_img_matrix)
-       # base_img_matrix.astype(np.int64)
         
-        
-        
+        print("LEN MATRIX: ", len(base_img_matrix))
         camera.wait_recording(0.125)
-        
+
         try:
             print('Starting websockets thread')
             websocket_thread.start()
@@ -205,23 +179,20 @@ def main():
             http_thread.start()
             print('Starting broadcast thread')
             broadcast_thread.start()
-
             while True:
-                stream1 = io.BytesIO()
-
-                camera.wait_recording(0.125)
-
+                camera.wait_recording(0.250)
+                
                 camera.capture(stream1, use_video_port=True, format='jpeg')
-
+                
                 data_next = np.frombuffer(stream1.getvalue(), dtype=np.uint8)
                 
+                data_next.astype(np.int64)
+                
                 next_img_matrix = cv2.imdecode(data_next, 0)
-               # next_img_matrix.astype(np.int64)
-                monitor_changes(base_img_matrix, next_img_matrix)
-                camera.wait_recording(0.125)
-                stream1.close()
                 
-                
+                print("LEN MATRIX: ", len(next_img_matrix))
+
+                camera.wait_recording(0.250)
 
         except KeyboardInterrupt:
             pass
